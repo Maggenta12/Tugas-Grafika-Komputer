@@ -196,7 +196,6 @@ GLuint RenderEngine::BuildShader(const char* vertexPath, const char* fragmentPat
 	const GLchar * fShaderCode = fragmentCode.c_str();
 	// 2. Compile shaders
 	GLuint vertex, fragment;
-
 	// Vertex Shader
 	vertex = glCreateShader(GL_VERTEX_SHADER);
 	glShaderSource(vertex, 1, &vShaderCode, NULL);
