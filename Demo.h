@@ -13,9 +13,9 @@ public:
 	Demo();
 	~Demo();
 private:
-	GLuint shaderProgram, VBO, VAO, EBO, texture, VBO2, VAO2, EBO2, texture2;
-	GLuint shadowmapShader, cubeVBO, cubeVAO, cubeEBO, cube_texture, planeVBO, planeVAO, planeEBO, plane_texture, stexture, stexture2;
+	GLuint depthmapShader, shadowmapShader, cubeVBO, cubeVAO, cubeEBO, cube_texture, planeVBO, planeVAO, planeEBO, plane_texture, stexture, stexture2, depthMapFBO, depthMap;
 	float angle = 0, viewCamX, viewCamY, viewCamZ, upCamX, upCamY, upCamZ, posCamX, posCamY, posCamZ, CAMERA_SPEED, fovy;
+	const unsigned int SHADOW_WIDTH = 1024, SHADOW_HEIGHT = 1024;
 	virtual void Init();
 	virtual void DeInit();
 	virtual void Update(double deltaTime);
@@ -23,8 +23,10 @@ private:
 	virtual void ProcessInput(GLFWwindow *window);
 	void BuildTexturedCube();
 	void BuildTexturedPlane();
-	void DrawTexturedCube();
-	void DrawTexturedPlane();
+	void DrawTexturedCube(GLuint shader);
+	void DrawTexturedPlane(GLuint shader);
+	void BuildDepthMap();
+	void BuildShaders();
 	void MoveCamera(float speed);
 	void StrafeCamera(float speed);
 	void RotateCamera(float speed);

@@ -13,12 +13,11 @@ Demo::~Demo() {
 
 
 void Demo::Init() {
-	// build and compile our shader program
-	// ------------------------------------
-	shadowmapShader = BuildShader("multipleLight.vert", "multipleLight.frag", nullptr);
+	BuildShaders();
+	BuildDepthMap();
 	BuildTexturedCube();
 	BuildTexturedPlane();
-	InitCamera();
+
 }
 
 void Demo::DeInit() {
@@ -30,167 +29,88 @@ void Demo::DeInit() {
 	glDeleteVertexArrays(1, &planeVAO);
 	glDeleteBuffers(1, &planeVBO);
 	glDeleteBuffers(1, &planeEBO);
+	glDeleteBuffers(1, &depthMapFBO);
 }
 
 // process all input: query GLFW whether relevant keys are pressed/released this frame and react accordingly
 // ---------------------------------------------------------------------------------------------------------
-void Demo::ProcessInput(GLFWwindow* window) {
+void Demo::ProcessInput(GLFWwindow *window) {
 	if (glfwGetKey(window, GLFW_KEY_ESCAPE) == GLFW_PRESS) {
 		glfwSetWindowShouldClose(window, true);
 	}
-
-	// zoom camera
-	// -----------
-	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_RIGHT) == GLFW_PRESS) {
-		if (fovy < 90) {
-			fovy += 0.0050f;
-		}
-	}
-
-	if (glfwGetMouseButton(window, GLFW_MOUSE_BUTTON_LEFT) == GLFW_PRESS) {
-		if (fovy > 0) {
-			fovy -= 0.0050f;
-		}
-	}
-
-	// update camera movement 
-	// -------------
-	if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS) {
-		MoveCamera(CAMERA_SPEED);
-	}
-	if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS) {
-		MoveCamera(-CAMERA_SPEED);
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS) {
-		StrafeCamera(-CAMERA_SPEED);
-	}
-
-	if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS) {
-		StrafeCamera(CAMERA_SPEED);
-	}
-
-	// update camera rotation
-	// ----------------------
-	double mouseX, mouseY;
-	double midX = screenWidth / 2;
-	double midY = screenHeight / 2;
-	float angleY = 0.0f;
-	float angleZ = 0.0f;
-
-	// Get mouse position
-	glfwGetCursorPos(window, &mouseX, &mouseY);
-	if ((mouseX == midX) && (mouseY == midY)) {
-		return;
-	}
-
-	// Set mouse position
-	glfwSetCursorPos(window, midX, midY);
-
-	// Get the direction from the mouse cursor, set a resonable maneuvering speed
-	angleY = (float)((midX - mouseX)) / 1000;
-	angleZ = (float)((midY - mouseY)) / 1000;
-
-	// The higher the value is the faster the camera looks around.
-	viewCamY += angleZ * 2;
-
-	// limit the rotation around the x-axis
-	if ((viewCamY - posCamY) > 8) {
-		viewCamY = posCamY + 8;
-	}
-	if ((viewCamY - posCamY) < -8) {
-		viewCamY = posCamY - 8;
-	}
-	RotateCamera(-angleY);
-
-
-
-
 }
 
 void Demo::Update(double deltaTime) {
-	angle += (float)((deltaTime * 50.5f) / 1000);
 }
 
 void Demo::Render() {
-	glViewport(0, 0, this->screenWidth, this->screenHeight);
-
-	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-	glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-
-	glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-
+	
 	glEnable(GL_DEPTH_TEST);
 
-	// Pass perspective projection matrix
-	glm::mat4 projection = glm::perspective(45.0f, (GLfloat)this->screenWidth / (GLfloat)this->screenHeight, 0.1f, 100.0f);
-	GLint projLoc = glGetUniformLocation(this->shadowmapShader, "projection");
-	glUniformMatrix4fv(projLoc, 1, GL_FALSE, glm::value_ptr(projection));
-
-	// LookAt camera (position, target/direction, up)
-	glm::vec3 cameraPos = glm::vec3(0, 3, 3);
-	glm::vec3 cameraFront = glm::vec3(0, -1, -1);
-	glm::mat4 view = glm::lookAt(glm::vec3(posCamX, posCamY, posCamZ), glm::vec3(viewCamX, viewCamY, viewCamZ), glm::vec3(upCamX, upCamY, upCamZ));
-	GLint viewLoc = glGetUniformLocation(this->shadowmapShader, "view");
-	glUniformMatrix4fv(viewLoc, 1, GL_FALSE, glm::value_ptr(view));
-
-	// set lighting attributes
-	GLint viewPosLoc = glGetUniformLocation(this->shadowmapShader, "viewPos");
-	glUniform3f(viewPosLoc, cameraPos.x, cameraPos.y, cameraPos.z);
-
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "dirLight.direction"), 0.0f, -1.0f, -1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "dirLight.ambient"), 0.1f, 0.1f, 0.1f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "dirLight.diffuse"), 1.0f, 0.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "dirLight.specular"), 0.1f, 0.1f, 0.1f);
-	// point light 1
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].position"), 0.0f, 3.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].ambient"), 1.0f, 0.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].diffuse"), 1.0f, 0.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].specular"), 1.0f, 0.0f, 0.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].linear"), 0.09f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[0].quadratic"), 0.032f);
-	// point light 2
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].position"), -2.0f, 3.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].ambient"), 0.0f, 1.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].diffuse"), 0.0f, 1.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].specular"), 0.0f, 1.0f, 0.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].linear"), 0.09f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[1].quadratic"), 0.032f);
-	// point light 3
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].position"), 2.0f, 3.0f, 0.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].ambient"), 0.0f, 0.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].diffuse"), 0.0f, 0.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].specular"), 0.0f, 0.0f, 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].linear"), 0.09f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[2].quadratic"), 0.032f);
-	// point light 4
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].position"), 0.0f, 3.0f, 2.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].ambient"), 0.0f, 1.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].diffuse"), 0.0f, 1.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].specular"), 0.0f, 1.0f, 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].linear"), 0.09f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "pointLights[3].quadratic"), 0.032f);
-	// spotLight
-	glUniform3fv(glGetUniformLocation(this->shadowmapShader, "spotLight.position"), 1, &cameraPos[0]);
-	glUniform3fv(glGetUniformLocation(this->shadowmapShader, "spotLight.direction"), 1, &cameraFront[0]);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "spotLight.ambient"), 1.0f, 0.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "spotLight.diffuse"), 1.0f, 0.0f, 1.0f);
-	glUniform3f(glGetUniformLocation(this->shadowmapShader, "spotLight.specular"), 1.0f, 0.0f, 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "spotLight.constant"), 1.0f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "spotLight.linear"), 0.09f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "spotLight.quadratic"), 0.032f);
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "spotLight.cutOff"), glm::cos(glm::radians(12.5f)));
-	glUniform1f(glGetUniformLocation(this->shadowmapShader, "spotLight.outerCutOff"), glm::cos(glm::radians(15.0f)));
+	glClearColor(0.1f, 0.1f, 0.1f, 1.0f);
 	
-	DrawTexturedCube();
-	DrawTexturedPlane();
+	// Step 1 Render depth of scene to texture
+	// ----------------------------------------
+	glm::mat4 lightProjection, lightView;
+	glm::mat4 lightSpaceMatrix;
+	float near_plane = 1.0f, far_plane = 7.5f;
+	lightProjection = glm::ortho(-10.0f, 10.0f, -10.0f, 10.0f, near_plane, far_plane);
+	lightView = glm::lookAt(glm::vec3(-2.0f, 4.0f, -1.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0, 1.0, 0.0));
+	lightSpaceMatrix = lightProjection * lightView;
+	// render scene from light's point of view
+	UseShader(this->depthmapShader);
+	glUniformMatrix4fv(glGetUniformLocation(this->depthmapShader, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
+	glViewport(0, 0, this->SHADOW_WIDTH, this->SHADOW_HEIGHT);
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glClear(GL_DEPTH_BUFFER_BIT);
+	DrawTexturedCube(this->depthmapShader);
+	DrawTexturedPlane(this->depthmapShader);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
+
+	
+
+	// Step 2 Render scene normally using generated depth map
+	// ------------------------------------------------------
+	glViewport(0, 0, this->screenWidth, this->screenHeight);
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+	// Pass perspective projection matrix
+	UseShader(this->shadowmapShader);
+	glm::mat4 projection = glm::perspective(45.0f, (GLfloat)this->screenWidth / (GLfloat)this->screenHeight, 0.1f, 100.0f);
+	glUniformMatrix4fv(glGetUniformLocation(this->shadowmapShader, "projection"), 1, GL_FALSE, glm::value_ptr(projection));
+	// LookAt camera (position, target/direction, up)
+	glm::vec3 cameraPos = glm::vec3(0, 4, 5);
+	glm::vec3 cameraFront = glm::vec3(0, 0, 0);
+	glm::mat4 view = glm::lookAt(cameraPos, cameraFront, glm::vec3(0, 1, 0));
+	glUniformMatrix4fv(glGetUniformLocation(this->shadowmapShader, "view"), 1, GL_FALSE, glm::value_ptr(view));
+	
+	// Setting Light Attributes
+	glUniformMatrix4fv(glGetUniformLocation(this->shadowmapShader, "lightSpaceMatrix"), 1, GL_FALSE, glm::value_ptr(lightSpaceMatrix));
+	glUniform3f(glGetUniformLocation(this->shadowmapShader, "viewPos"), cameraPos.x, cameraPos.y, cameraPos.z);
+	glUniform3f(glGetUniformLocation(this->shadowmapShader, "lightPos"), -2.0f, 4.0f, -1.0f);
+
+	// Configure Shaders
+	glUniform1i(glGetUniformLocation(this->shadowmapShader, "diffuseTexture"), 0);
+	glUniform1i(glGetUniformLocation(this->shadowmapShader, "shadowMap"), 1);
+
+	// Render floor
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, plane_texture);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	DrawTexturedPlane(this->shadowmapShader);
+	
+	// Render cube
+	glActiveTexture(GL_TEXTURE0);
+	glBindTexture(GL_TEXTURE_2D, cube_texture);
+	glActiveTexture(GL_TEXTURE1);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	DrawTexturedCube(this->shadowmapShader);
 
 	glDisable(GL_DEPTH_TEST);
 }
+
+
 
 void Demo::BuildTexturedCube()
 {
@@ -207,19 +127,11 @@ void Demo::BuildTexturedCube()
 	SOIL_free_image_data(image);
 	glBindTexture(GL_TEXTURE_2D, 0);
 
-	glGenTextures(1, &stexture);
-	glBindTexture(GL_TEXTURE_2D, stexture);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	image = SOIL_load_image("crate_specularmap.png", &width, &height, 0, SOIL_LOAD_RGBA);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
-	SOIL_free_image_data(image);
-	glBindTexture(GL_TEXTURE_2D, 0);
 
 	// set up vertex data (and buffer(s)) and configure vertex attributes
 	// ------------------------------------------------------------------
 	float vertices[] = {
-		// format position, tex coords
+		// format position, tex coords, normal
 		// front
 		-1.5, -0.5, 0.5, 0, 0, 0.0f,  0.0f,  1.0f, // 0
 		1.5, -0.5, 0.5, 1, 0,  0.0f,  0.0f,  1.0f, // 1
@@ -256,6 +168,7 @@ void Demo::BuildTexturedCube()
 		1.5, -0.5,  0.5, 1, 1,  0.0f,  -1.0f,  0.0f, // 22
 		-0.5, -0.5,  0.5, 0, 1, 0.0f,  -1.0f,  0.0f, // 23
 	};
+
 
 	unsigned int indices[] = {
 		0,  1,  2,  0,  2,  3,   // front
@@ -312,31 +225,21 @@ void Demo::BuildTexturedPlane()
 	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	int width, height;
-	unsigned char* image = SOIL_load_image("lantai_diffusermap.png", &width, &height, 0, SOIL_LOAD_RGBA);
+	unsigned char* image = SOIL_load_image("lantai desa.png", &width, &height, 0, SOIL_LOAD_RGBA);
 	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
 	glGenerateMipmap(GL_TEXTURE_2D);
 	SOIL_free_image_data(image);
 	glBindTexture(GL_TEXTURE_2D, 0);
-
-	glGenTextures(1, &stexture2);
-	glBindTexture(GL_TEXTURE_2D, stexture2);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-	image = SOIL_load_image("lantai_SpecularMap .png", &width, &height, 0, SOIL_LOAD_RGBA);
-	glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, image);
-	SOIL_free_image_data(image);
-	glBindTexture(GL_TEXTURE_2D, 0);
+	
 
 	// Build geometry
 	GLfloat vertices[] = {
 		// format position, tex coords
 		// bottom
-		-50.0, -0.5, -50.0,  0,  0, 0.0f,  1.0f,  0.0f,
-		50.0, -0.5, -50.0, 50,  0, 0.0f,  1.0f,  0.0f,
-		50.0, -0.5,  50.0, 50, 50, 0.0f,  1.0f,  0.0f,
-		-50.0, -0.5,  50.0,  0, 50, 0.0f,  1.0f,  0.0f,
-
-
+		-25.0f,	-0.5f, -25.0f,  0,  0, 0.0f,  1.0f,  0.0f,
+		25.0f,	-0.5f, -25.0f, 25,  0, 0.0f,  1.0f,  0.0f,
+		25.0f,	-0.5f,  25.0f, 25, 25, 0.0f,  1.0f,  0.0f,
+		-25.0f,	-0.5f,  25.0f,  0, 25, 0.0f,  1.0f,  0.0f,
 	};
 
 	GLuint indices[] = { 0,  2,  1,  0,  3,  2 };
@@ -366,27 +269,14 @@ void Demo::BuildTexturedPlane()
 	glBindVertexArray(0); // Unbind VAO
 }
 
-void Demo::DrawTexturedCube()
+void Demo::DrawTexturedCube(GLuint shader)
 {
-	UseShader(this->shadowmapShader);
-
-	glActiveTexture(GL_TEXTURE0);
-	glBindTexture(GL_TEXTURE_2D, cube_texture);
-	glUniform1i(glGetUniformLocation(this->shadowmapShader, "material.diffuse"), 0);
-
-	glActiveTexture(GL_TEXTURE1);
-	glBindTexture(GL_TEXTURE_2D, stexture);
-	glUniform1i(glGetUniformLocation(this->shadowmapShader, "material.specular"), 1);
-
-	GLint shininessMatLoc = glGetUniformLocation(this->shadowmapShader, "material.shininess");
-	glUniform1f(shininessMatLoc, 0.4f);
-
-	glBindVertexArray(cubeVAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
-
+	UseShader(shader);
+	glBindVertexArray(cubeVAO);
 	glm::mat4 model;
-	model = glm::translate(model, glm::vec3(0, 0, 0));
+	model = glm::translate(model, glm::vec3(0, 0.5f, 0));
 
-	GLint modelLoc = glGetUniformLocation(this->shadowmapShader, "model");
+	GLint modelLoc = glGetUniformLocation(shader, "model");
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
 	glDrawElements(GL_TRIANGLES, 36, GL_UNSIGNED_INT, 0);
@@ -395,25 +285,13 @@ void Demo::DrawTexturedCube()
 	glBindVertexArray(0);
 }
 
-void Demo::DrawTexturedPlane()
+void Demo::DrawTexturedPlane(GLuint shader)
 {
-	UseShader(this->shadowmapShader);
-
-	glActiveTexture(GL_TEXTURE2);
-	glBindTexture(GL_TEXTURE_2D, plane_texture);
-	glUniform1i(glGetUniformLocation(this->shadowmapShader, "material.diffuse"), 2);
-
-	glActiveTexture(GL_TEXTURE3);
-	glBindTexture(GL_TEXTURE_2D, stexture2);
-	glUniform1i(glGetUniformLocation(this->shadowmapShader, "material.specular"), 3);
-
-	GLint shininessMatLoc = glGetUniformLocation(this->shadowmapShader, "material.shininess");
-	glUniform1f(shininessMatLoc, 0.4f);
-
+	UseShader(shader);
 	glBindVertexArray(planeVAO); // seeing as we only have a single VAO there's no need to bind it every time, but we'll do so to keep things a bit more organized
 
 	glm::mat4 model;
-	GLint modelLoc = glGetUniformLocation(this->shadowmapShader, "model");
+	GLint modelLoc = glGetUniformLocation(shader, "model");
 	glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
 
 	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
@@ -421,57 +299,40 @@ void Demo::DrawTexturedPlane()
 	glBindTexture(GL_TEXTURE_2D, 0);
 	glBindVertexArray(0);
 }
-void Demo::InitCamera()
-{
-	posCamX = 0.0f;
-	posCamY = 1.0f;
-	posCamZ = 8.0f;
-	viewCamX = 0.0f;
-	viewCamY = 1.0f;
-	viewCamZ = 0.0f;
-	upCamX = 0.0f;
-	upCamY = 1.0f;
-	upCamZ = 0.0f;
-	CAMERA_SPEED = 0.001f;
-	fovy = 45.0f;
-	glfwSetInputMode(this->window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+
+void Demo::BuildDepthMap() {
+	// configure depth map FBO
+	// -----------------------
+	glGenFramebuffers(1, &depthMapFBO);
+	// create depth texture
+	glGenTextures(1, &depthMap);
+	glBindTexture(GL_TEXTURE_2D, depthMap);
+	glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT, this->SHADOW_WIDTH, this->SHADOW_HEIGHT, 0, GL_DEPTH_COMPONENT, GL_FLOAT, NULL);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);
+	glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
+	float borderColor[] = { 1.0, 1.0, 1.0, 1.0 };
+	glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
+
+	// attach depth texture as FBO's depth buffer
+	glBindFramebuffer(GL_FRAMEBUFFER, depthMapFBO);
+	glFramebufferTexture2D(GL_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthMap, 0);
+	glDrawBuffer(GL_NONE);
+	glReadBuffer(GL_NONE);
+	glBindFramebuffer(GL_FRAMEBUFFER, 0);
 }
 
-
-void Demo::MoveCamera(float speed)
+void Demo::BuildShaders()
 {
-	float x = viewCamX - posCamX;
-	float z = viewCamZ - posCamZ;
-	// forward positive cameraspeed and backward negative -cameraspeed.
-	posCamX = posCamX + x * speed;
-	posCamZ = posCamZ + z * speed;
-	viewCamX = viewCamX + x * speed;
-	viewCamZ = viewCamZ + z * speed;
+	// build and compile our shader program
+	// ------------------------------------
+	shadowmapShader = BuildShader("shadowMapping.vert", "shadowMapping.frag", nullptr);
+	depthmapShader = BuildShader("depthMap.vert", "depthMap.frag", nullptr);
 }
 
-void Demo::StrafeCamera(float speed)
-{
-	float x = viewCamX - posCamX;
-	float z = viewCamZ - posCamZ;
-	float orthoX = -z;
-	float orthoZ = x;
-
-	// left positive cameraspeed and right negative -cameraspeed.
-	posCamX = posCamX + orthoX * speed;
-	posCamZ = posCamZ + orthoZ * speed;
-	viewCamX = viewCamX + orthoX * speed;
-	viewCamZ = viewCamZ + orthoZ * speed;
-}
-
-void Demo::RotateCamera(float speed)
-{
-	float x = viewCamX - posCamX;
-	float z = viewCamZ - posCamZ;
-	viewCamZ = (float)(posCamZ + glm::sin(speed) * x + glm::cos(speed) * z);
-	viewCamX = (float)(posCamX + glm::cos(speed) * x - glm::sin(speed) * z);
-}
 
 int main(int argc, char** argv) {
 	RenderEngine &app = Demo();
-	app.Start("Multiple Lighting Demo", 800, 600, false, false);
+	app.Start("Shadow Mapping Demo", 700, 500, false, false);
 }
